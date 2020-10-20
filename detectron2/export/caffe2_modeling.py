@@ -9,12 +9,13 @@ import torch
 from detectron2.modeling import meta_arch
 from detectron2.modeling.box_regression import Box2BoxTransform
 from detectron2.modeling.meta_arch.panoptic_fpn import combine_semantic_and_instance_outputs
+from detectron2.modeling.meta_arch.retinanet import permute_to_N_HWA_K
 from detectron2.modeling.postprocessing import detector_postprocess, sem_seg_postprocess
 from detectron2.modeling.roi_heads import keypoint_head
 from detectron2.structures import Boxes, ImageList, Instances, RotatedBoxes
 
 from .c10 import Caffe2Compatible
-from .patcher import ROIHeadsPatcher, patch_generalized_rcnn
+from .caffe2_patch import ROIHeadsPatcher, patch_generalized_rcnn
 from .shared import (
     alias,
     check_set_pb_arg,
@@ -250,7 +251,9 @@ class Caffe2GeneralizedRCNN(Caffe2MetaArch):
         torch_model = patch_generalized_rcnn(torch_model)
         super().__init__(cfg, torch_model)
 
-        self.roi_heads_patcher = ROIHeadsPatcher(cfg, self._wrapped_model.roi_heads)
+        self.roi_heads_patcher = ROIHeadsPatcher(
+            self._wrapped_model.roi_heads, cfg.EXPORT_CAFFE2.USE_HEATMAP_MAX_KEYPOINT
+        )
 
     def encode_additional_info(self, predict_net, init_net):
         size_divisibility = self._wrapped_model.backbone.size_divisibility
@@ -287,7 +290,9 @@ class Caffe2PanopticFPN(Caffe2MetaArch):
         torch_model = patch_generalized_rcnn(torch_model)
         super().__init__(cfg, torch_model)
 
-        self.roi_heads_patcher = ROIHeadsPatcher(cfg, self._wrapped_model.roi_heads)
+        self.roi_heads_patcher = ROIHeadsPatcher(
+            self._wrapped_model.roi_heads, cfg.EXPORT_CAFFE2.USE_HEATMAP_MAX_KEYPOINT
+        )
 
     @mock_torch_nn_functional_interpolate()
     def forward(self, inputs):
@@ -391,13 +396,13 @@ class Caffe2RetinaNet(Caffe2MetaArch):
         return_tensors = [images.image_sizes]
 
         features = self._wrapped_model.backbone(images.tensor)
-        features = [features[f] for f in self._wrapped_model.in_features]
+        features = [features[f] for f in self._wrapped_model.head_in_features]
         for i, feature_i in enumerate(features):
             features[i] = alias(feature_i, "feature_{}".format(i), is_backward=True)
             return_tensors.append(features[i])
 
-        box_cls, box_delta = self._wrapped_model.head(features)
-        for i, (box_cls_i, box_delta_i) in enumerate(zip(box_cls, box_delta)):
+        pred_logits, pred_anchor_deltas = self._wrapped_model.head(features)
+        for i, (box_cls_i, box_delta_i) in enumerate(zip(pred_logits, pred_anchor_deltas)):
             return_tensors.append(alias(box_cls_i, "box_cls_{}".format(i)))
             return_tensors.append(alias(box_delta_i, "box_delta_{}".format(i)))
 
@@ -413,11 +418,13 @@ class Caffe2RetinaNet(Caffe2MetaArch):
 
         # Inference parameters:
         check_set_pb_arg(
-            predict_net, "score_threshold", "f", _cast_to_f32(self._wrapped_model.score_threshold)
+            predict_net, "score_threshold", "f", _cast_to_f32(self._wrapped_model.test_score_thresh)
         )
-        check_set_pb_arg(predict_net, "topk_candidates", "i", self._wrapped_model.topk_candidates)
         check_set_pb_arg(
-            predict_net, "nms_threshold", "f", _cast_to_f32(self._wrapped_model.nms_threshold)
+            predict_net, "topk_candidates", "i", self._wrapped_model.test_topk_candidates
+        )
+        check_set_pb_arg(
+            predict_net, "nms_threshold", "f", _cast_to_f32(self._wrapped_model.test_nms_thresh)
         )
         check_set_pb_arg(
             predict_net,
@@ -452,9 +459,9 @@ class Caffe2RetinaNet(Caffe2MetaArch):
         self.anchor_generator = torch.load(serialized_anchor_generator)
         bbox_reg_weights = get_pb_arg_floats(predict_net, "bbox_reg_weights", None)
         self.box2box_transform = Box2BoxTransform(weights=tuple(bbox_reg_weights))
-        self.score_threshold = get_pb_arg_valf(predict_net, "score_threshold", None)
-        self.topk_candidates = get_pb_arg_vali(predict_net, "topk_candidates", None)
-        self.nms_threshold = get_pb_arg_valf(predict_net, "nms_threshold", None)
+        self.test_score_thresh = get_pb_arg_valf(predict_net, "score_threshold", None)
+        self.test_topk_candidates = get_pb_arg_vali(predict_net, "topk_candidates", None)
+        self.test_nms_thresh = get_pb_arg_valf(predict_net, "nms_threshold", None)
         self.max_detections_per_image = get_pb_arg_vali(
             predict_net, "max_detections_per_image", None
         )
@@ -469,18 +476,21 @@ class Caffe2RetinaNet(Caffe2MetaArch):
             image_sizes = [[int(im[0]), int(im[1])] for im in c2_inputs["im_info"]]
 
             num_features = len([x for x in c2_results.keys() if x.startswith("box_cls_")])
-            box_cls = [c2_results["box_cls_{}".format(i)] for i in range(num_features)]
-            box_delta = [c2_results["box_delta_{}".format(i)] for i in range(num_features)]
+            pred_logits = [c2_results["box_cls_{}".format(i)] for i in range(num_features)]
+            pred_anchor_deltas = [c2_results["box_delta_{}".format(i)] for i in range(num_features)]
 
             # For each feature level, feature should have the same batch size and
             # spatial dimension as the box_cls and box_delta.
-            dummy_features = [box_delta[i].clone()[:, 0:0, :, :] for i in range(num_features)]
+            dummy_features = [x.clone()[:, 0:0, :, :] for x in pred_logits]
             anchors = self.anchor_generator(dummy_features)
 
             # self.num_classess can be inferred
-            self.num_classes = box_cls[0].shape[1] // (box_delta[0].shape[1] // 4)
+            self.num_classes = pred_logits[0].shape[1] // (pred_anchor_deltas[0].shape[1] // 4)
 
-            results = self.inference(box_cls, box_delta, anchors, image_sizes)
+            pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
+            pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
+
+            results = self.inference(anchors, pred_logits, pred_anchor_deltas, image_sizes)
             return meta_arch.GeneralizedRCNN._postprocess(results, batched_inputs, image_sizes)
 
         return f

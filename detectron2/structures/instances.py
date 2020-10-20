@@ -15,7 +15,7 @@ class Instances:
 
     Some basic usage:
 
-    1. Set/Get a field:
+    1. Set/get/check a field:
 
        .. code-block:: python
 
@@ -27,7 +27,12 @@ class Instances:
     3. Indexing: ``instances[indices]`` will apply the indexing on all the fields
        and returns a new :class:`Instances`.
        Typically, ``indices`` is a integer vector of indices,
-       or a binary mask of length ``num_instances``,
+       or a binary mask of length ``num_instances``
+
+       .. code-block:: python
+
+          category_3_detections = instances[instances.pred_classes == 3]
+          confident_detections = instances[instances.scores > 0.9]
     """
 
     def __init__(self, image_size: Tuple[int, int], **kwargs: Any):
@@ -102,7 +107,7 @@ class Instances:
         return self._fields
 
     # Tensor-like methods
-    def to(self, device: str) -> "Instances":
+    def to(self, *args: Any, **kwargs: Any) -> "Instances":
         """
         Returns:
             Instances: all fields are called with a `to(device)`, if the field has this method.
@@ -110,7 +115,7 @@ class Instances:
         ret = Instances(self._image_size)
         for k, v in self._fields.items():
             if hasattr(v, "to"):
-                v = v.to(device)
+                v = v.to(*args, **kwargs)
             ret.set(k, v)
         return ret
 

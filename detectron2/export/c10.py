@@ -15,7 +15,7 @@ from .shared import alias, to_device
 
 
 """
-This file contains caffe2-compatible implementation of several detectrno2 components.
+This file contains caffe2-compatible implementation of several detectron2 components.
 """
 
 
@@ -56,8 +56,8 @@ class InstancesList(object):
         self.image_size = self.im_info
 
     def get_fields(self):
-        """ like `get_fields` in the Instances object,
-        but return each field in tensor representations """
+        """like `get_fields` in the Instances object,
+        but return each field in tensor representations"""
         ret = {}
         for k, v in self.batch_extra_fields.items():
             # if isinstance(v, torch.Tensor):
@@ -193,7 +193,7 @@ class Caffe2RPN(Caffe2Compatible, rpn.RPN):
                 pre_nms_topN=self.pre_nms_topk[self.training],
                 post_nms_topN=self.post_nms_topk[self.training],
                 nms_thresh=self.nms_thresh,
-                min_size=self.min_box_side_len,
+                min_size=self.min_box_size,
                 # correct_transform_coords=True,  # deprecated argument
                 angle_bound_on=True,  # Default
                 angle_bound_lo=-180,
