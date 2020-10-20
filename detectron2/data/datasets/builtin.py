@@ -26,6 +26,7 @@ from .cityscapes import load_cityscapes_instances, load_cityscapes_semantic
 from .lvis import get_lvis_instances_meta, register_lvis_instances
 from .pascal_voc import register_pascal_voc
 from .register_coco import register_coco_instances, register_coco_panoptic_separated
+from .hat import register_hat
 
 # ==== Predefined datasets and splits for COCO ==========
 
@@ -212,9 +213,27 @@ def register_all_pascal_voc(root):
         MetadataCatalog.get(name).evaluator_type = "pascal_voc"
 
 
+# ==== Predefined splits for PASCAL VOC ===========
+def register_all_hat(root):
+    SPLITS = [
+        ("voc_2007_trainval", "VOC2007", "trainval"),
+        ("voc_2007_train", "VOC2007", "train"),
+        ("voc_2007_val", "VOC2007", "val"),
+        ("voc_2007_test", "VOC2007", "test"),
+        ("voc_2012_trainval", "VOC2012", "trainval"),
+        ("voc_2012_train", "VOC2012", "train"),
+        ("voc_2012_val", "VOC2012", "val"),
+    ]
+    for name, dirname, split in SPLITS:
+        year = 2007 if "2007" in name else 2012
+        register_hat(name, os.path.join(root, dirname), split, year)
+        MetadataCatalog.get(name).evaluator_type = "hat"
+
 # Register them all under "./datasets"
-_root = os.getenv("DETECTRON2_DATASETS", "datasets")
-register_all_coco(_root)
-register_all_lvis(_root)
-register_all_cityscapes(_root)
-register_all_pascal_voc(_root)
+# _root = os.getenv("DETECTRON2_DATASETS", "datasets")
+_root = '/data/datasets/tianji/hat/VOCdevkit'
+# register_all_coco(_root)
+# register_all_lvis(_root)
+# register_all_cityscapes(_root)
+# register_all_pascal_voc(_root)
+register_all_hat(_root)

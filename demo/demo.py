@@ -6,6 +6,9 @@ import os
 import time
 import cv2
 import tqdm
+import sys
+sys.path.append('/projects/open_sources/segmentation/detectron2')
+import pdb
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
@@ -35,19 +38,20 @@ def get_parser():
     parser.add_argument(
         "--config-file",
         default="configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml",
+        # default="configs/COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml",
         metavar="FILE",
         help="path to config file",
     )
     parser.add_argument("--webcam", action="store_true", help="Take inputs from webcam.")
     parser.add_argument("--video-input", help="Path to video file.")
     parser.add_argument(
-        "--input",
+        "--input",default=['/data/datasets/coco/sample/*.jpg'],
         nargs="+",
         help="A list of space separated input images; "
         "or a single glob pattern such as 'directory/*.jpg'",
     )
     parser.add_argument(
-        "--output",
+        "--output",default='/data/datasets/coco/seg_result',
         help="A file or directory to save output visualizations. "
         "If not given, will show output in an OpenCV window.",
     )
@@ -82,6 +86,7 @@ if __name__ == "__main__":
         if len(args.input) == 1:
             args.input = glob.glob(os.path.expanduser(args.input[0]))
             assert args.input, "The input path(s) was not found"
+        # pdb.set_trace()
         for path in tqdm.tqdm(args.input, disable=not args.output):
             # use PIL, to be consistent with evaluation
             img = read_image(path, format="BGR")

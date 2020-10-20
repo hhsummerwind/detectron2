@@ -220,6 +220,8 @@ def get_detection_dataset_dicts(
         proposal_files (list[str]): if given, a list of object proposal files
             that match each dataset in `dataset_names`.
     """
+    # import pdb
+    # pdb.set_trace()
     assert len(dataset_names)
     dataset_dicts = [DatasetCatalog.get(dataset_name) for dataset_name in dataset_names]
     for dataset_name, dicts in zip(dataset_names, dataset_dicts):
@@ -274,6 +276,8 @@ def build_detection_train_loader(cfg, mapper=None):
     Returns:
         an infinite iterator of training data
     """
+    # import pdb
+    # pdb.set_trace()
     num_workers = get_world_size()
     images_per_batch = cfg.SOLVER.IMS_PER_BATCH
     assert (
@@ -287,7 +291,8 @@ def build_detection_train_loader(cfg, mapper=None):
         images_per_batch, num_workers
     )
     images_per_worker = images_per_batch // num_workers
-
+    # import pdb
+    # pdb.set_trace()
     dataset_dicts = get_detection_dataset_dicts(
         cfg.DATASETS.TRAIN,
         filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,

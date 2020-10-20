@@ -20,6 +20,8 @@ import logging
 import os
 from collections import OrderedDict
 import torch
+import sys
+sys.path.append('/projects/open_sources/segmentation/detectron2')
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
@@ -148,6 +150,8 @@ def main(args):
     If you'd like to do anything fancier than the standard training logic,
     consider writing your own training loop or subclassing the trainer.
     """
+    # import pdb
+    # pdb.set_trace()
     trainer = Trainer(cfg)
     trainer.resume_or_load(resume=args.resume)
     if cfg.TEST.AUG.ENABLED:
@@ -158,6 +162,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+    os.environ['DETECTRON2_DATASETS'] = '/data/datasets/tianji/hat/VOCdevkit'
     args = default_argument_parser().parse_args()
     print("Command Line Args:", args)
     launch(

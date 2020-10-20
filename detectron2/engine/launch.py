@@ -32,7 +32,9 @@ def launch(main_func, num_gpus_per_machine, num_machines=1, machine_rank=0, dist
                        Can be set to "auto" to automatically select a free port on localhost
         args (tuple): arguments passed to main_func
     """
+    print("hh, launch: first line")
     world_size = num_machines * num_gpus_per_machine
+    print("hh, launch: world_size = {}".format(world_size))
     if world_size > 1:
         # https://github.com/pytorch/pytorch/pull/14391
         # TODO prctl in spawned processes

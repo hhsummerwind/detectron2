@@ -9,6 +9,9 @@ This script is a simplified version of the training script in detectron2/tools.
 
 import os
 import torch
+import pdb
+import sys
+sys.path.append("/projects/open_sources/segmentation/detectron2")
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
@@ -104,6 +107,7 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
+    # print("hh, main: cfg = ", cfg)
 
     if args.eval_only:
         model = Trainer.build_model(cfg)
@@ -114,7 +118,7 @@ def main(args):
         if comm.is_main_process():
             verify_results(cfg, res)
         return res
-
+    # pdb.set_trace()
     trainer = Trainer(cfg)
     trainer.resume_or_load(resume=args.resume)
     return trainer.train()
@@ -123,6 +127,7 @@ def main(args):
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()
     print("Command Line Args:", args)
+    # pdb.set_trace()
     launch(
         main,
         args.num_gpus,

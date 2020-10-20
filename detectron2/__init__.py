@@ -3,6 +3,7 @@
 from .utils.env import setup_environment
 
 setup_environment()
+from .config.defaults import _C
 
 
 # This line will be programatically read/write by setup.py.
